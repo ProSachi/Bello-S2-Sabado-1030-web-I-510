@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Git Timeline & Collaboration</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background-color: #f4f6f8; color: #333; padding: 20px; margin: 0; }
+        .header { text-align: center; margin-bottom: 20px; }
+        .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .panel { background: white; border-radius: 8px; padding: 20px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); border-top: 4px solid; }
+        .panel.dev-a { border-color: #0366d6; }
+        .panel.dev-b { border-color: #2ea44f; }
+        .panel.remote { border-color: #24292e; background: #f6f8fa; }
+        
+        h2 { font-size: 16px; margin-top: 0; display: flex; justify-content: space-between; align-items: center; }
+        .controls { display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap; }
+        button { background-color: #e1e4e8; color: #24292e; border: 1px solid #d1d5da; padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; font-weight: 600; }
+        button:hover { background-color: #d1d5da; }
+        button.primary { background-color: #24292e; color: white; border-color: #24292e; }
+        button.primary:hover { background-color: #1b1f23; }
+        button.action-a { background-color: #0366d6; color: white; border-color: #0366d6; }
+        button.action-b { background-color: #2ea44f; color: white; border-color: #2ea44f; }
+
+        /* Timeline Representation */
+        .timeline { display: flex; align-items: center; min-height: 60px; overflow-x: auto; padding: 10px 0; }
+        .commit-node { width: 40px; height: 40px; border-radius: 50%; background: #fff; border: 3px solid #d73a49; display: flex; justify-content: center; align-items: center; font-family: monospace; font-size: 10px; font-weight: bold; position: relative; flex-shrink: 0; z-index: 2; box-shadow: 0 0 0 3px white;}
+        .commit-node::after { content: ''; position: absolute; width: 40px; height: 4px; background: #d1d5da; right: -40px; top: 50%; transform: translateY(-50%); z-index: -1; }
+        .commit-node:last-child::after { display: none; }
+        
+        .branch-tag { position: absolute; top: -25px; background: #c8e1ff; color: #0366d6; padding: 2px 6px; border-radius: 4px; font-size: 10px; white-space: nowrap; border: 1px solid #79b8ff;}
+        .empty-state { color: #586069; font-style: italic; font-size: 13px; }
+
+        /* Animation for PR */
+        @keyframes slideAcross {
+            0% { transform: translateY(0); opacity: 0; }
+            50% { opacity: 1; }
+            100% { transform: translateY(-100px); opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Simulador de Colaboración: Grafo, Clone y Fork</h1>
+    </div>
+
+    <div class="layout">
+        <!-- Nube (GitHub) -->
+        <div class="panel remote">
+            <h2>☁️ Repositorio Original (GitHub) <span style="font-size: 12px; color: #586069;">Dueño: Dev A</span></h2>
+            <div class="timeline" id="remote-a-timeline"><span class="empty-state">Repositorio vacío</span></div>
+        </div>
+
+        <div class="panel remote">
+            <h2>☁️ Repositorio Forkeado (GitHub) <span style="font-size: 12px; color: #586069;">Dueño: Dev B</span></h2>
+            <div class="controls">
+                <button onclick="forkRepo()" class="primary">Boton "Fork" (Web GitHub)</button>
+                <button onclick="createPR()" class="action-b" id="pr-btn" style="display:none;">Crear Pull Request a Original</button>
+            </div>
+            <div class="timeline" id="remote-b-timeline"><span class="empty-state">No se ha forkeado aún</span></div>
+        </div>
+
+        <!-- Locales -->
+        <div class="panel dev-a">
+            <h2>💻 Local: Desarrollador A</h2>
+            <div class="controls">
+                <button onclick="commitA()" class="action-a">git commit</button>
+                <button onclick="pushA()" class="action-a">git push</button>
+            </div>
+            <div class="timeline" id="local-a-timeline"></div>
+        </div>
+
+        <div class="panel dev-b">
+            <h2>💻 Local: Desarrollador B</h2>
+            <div class="controls">
+                <button onclick="cloneFork()" class="action-b">git clone (desde el Fork)</button>
+                <button onclick="commitB()" class="action-b">git commit</button>
+                <button onclick="pushB()" class="action-b">git push</button>
+            </div>
+            <div class="timeline" id="local-b-timeline"><span class="empty-state">Directorio no inicializado</span></div>
+        </div>
+    </div>
+
+    <script>
+        // El estado maneja las bases de datos de objetos (el historial)
+        let state = {
+            remoteA: [],
+            remoteB: null, // null significa no forkeado
+            localA: [],
+            localB: null,  // null significa no clonado
+            counter: 1
+        };
+
+        const getHash = () => Math.random().toString(16).substr(2, 4).toUpperCase();
+
+        // Inicializar el proyecto con un commit del Dev A
+        state.localA.push({ id: getHash(), num: state.counter++ });
+        state.remoteA.push({...state.localA[0]});
+
+        function renderTimeline(elementId, nodes, isRemote = false) {
+            const container = document.getElementById(elementId);
+            if (!nodes) {
+                container.innerHTML = `<span class="empty-state">No inicializado</span>`;
+                return;
+            }
+            if (nodes.length === 0) {
+                container.innerHTML = `<span class="empty-state">Vacío</span>`;
+                return;
+            }
+
+            container.innerHTML = nodes.map((node, index) => {
+                const isLast = index === nodes.length - 1;
+                let tag = '';
+                if (isLast) {
+                    tag = `<div class="branch-tag">${isRemote ? 'main' : 'HEAD -> main'}</div>`;
+                }
+                return `<div class="commit-node" title="Commit Hash: ${node.id}">${tag}${node.id}</div>`;
+            }).join('');
+        }
+
+        function render() {
+            renderTimeline('local-a-timeline', state.localA);
+            renderTimeline('remote-a-timeline', state.remoteA, true);
+            renderTimeline('remote-b-timeline', state.remoteB, true);
+            renderTimeline('local-b-timeline', state.localB);
+
+            // Control de visibilidad del botón PR
+            const prBtn = document.getElementById('pr-btn');
+            if (state.remoteB && state.remoteB.length > state.remoteA.length) {
+                prBtn.style.display = 'inline-block';
+            } else {
+                prBtn.style.display = 'none';
+            }
+        }
+
+        // Acciones Dev A
+        function commitA() {
+            state.localA.push({ id: getHash(), num: state.counter++ });
+            render();
+        }
+
+        function pushA() {
+            if (state.localA.length > state.remoteA.length) {
+                state.remoteA = JSON.parse(JSON.stringify(state.localA));
+                render();
+            } else {
+                alert("Remote Original ya está actualizado.");
+            }
+        }
+
+        // Acciones GitHub
+        function forkRepo() {
+            if (state.remoteA.length === 0) return alert("El original está vacío.");
+            state.remoteB = JSON.parse(JSON.stringify(state.remoteA));
+            render();
+            alert("El repositorio ha sido forkeado. Dev B ahora tiene una copia remota en su cuenta.");
+        }
+
+        // Acciones Dev B
+        function cloneFork() {
+            if (!state.remoteB) return alert("Primero debes hacer Fork del repositorio en GitHub.");
+            state.localB = JSON.parse(JSON.stringify(state.remoteB));
+            render();
+        }
+
+        function commitB() {
+            if (!state.localB) return alert("Primero debes hacer clone.");
+            state.localB.push({ id: getHash(), num: state.counter++ });
+            render();
+        }
+
+        function pushB() {
+            if (!state.localB) return alert("No has clonado el repositorio.");
+            if (state.localB.length > state.remoteB.length) {
+                state.remoteB = JSON.parse(JSON.stringify(state.localB));
+                render();
+            } else {
+                alert("Tu fork remoto ya está actualizado.");
+            }
+        }
+
+        function createPR() {
+            const nuevosCommits = state.remoteB.filter(
+                nb => !state.remoteA.find(na => na.id === nb.id)
+            );
+            
+            if (nuevosCommits.length === 0) return alert("No hay commits nuevos para hacer Pull Request.");
+
+            if (confirm(`GitHub: ¿Deseas aprobar el Pull Request e integrar ${nuevosCommits.length} commits al Repositorio Original?`)) {
+                state.remoteA.push(...JSON.parse(JSON.stringify(nuevosCommits)));
+                
+                // Simular un merge commit en la red
+                state.remoteA.push({ id: getHash(), num: 999 });
+                
+                // Actualizar local A para simular que hace un pull
+                alert("PR Aprobado. Dev A debería hacer 'git pull' para ver los cambios localmente.");
+                render();
+            }
+        }
+
+        render();
+    </script>
+</body>
+</html>

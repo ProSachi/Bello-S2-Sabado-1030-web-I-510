@@ -1,0 +1,33 @@
+*{
+    margin: 0;
+}
+
+.lista{
+    background-color: aquamarine;
+}
+
+.cambio{
+    background-color: blue;
+}
+
+li{
+    list-style: none;
+    color: black;
+}
+.pnuevas{
+    color: blue;
+    background-color: blueviolet;
+    font-size: small;
+}
+
+#contenedor{
+    color: greenyellow;
+    font-family: cursive;
+    font-size: xx-large;
+}
+
+.divcontenedor{
+    width: 150px;
+    height: 150px;
+    background-color: burlywood;
+}

@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <form id="miFormulario">
+        <label for="nombre">Nombre:</label>
+        <input type="text" id="nombre" name="nombre">
+        <label for="email">Correo electrónico:</label>
+        <input type="email" id="email" name="email">
+        <button type="submit">Enviar</button>
+        <span id="error" style="color: red;"></span>
+    </form>
+    <script>
+        const formulario = document.getElementById('miFormulario');
+        const nombre = document.getElementById('nombre');
+        const email = document.getElementById('email');
+        const errorMsg = document.getElementById('error');
+        formulario.addEventListener('submit', function (e) {
+            let errores = [];
+            if (nombre.value.trim() === '') {
+                errores.push('El nombre es obligatorio.');
+            }
+            const regexEmail = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!regexEmail.test(email.value)) {
+                errores.push('Por favor, introduce un correo válido.');
+            }
+            if (errores.length > 0) {
+                e.preventDefault(); // Detiene el envío
+                errorMsg.textContent = errores.join(' ');
+            }
+        });
+    </script>
+</body>
+
+</html>

@@ -15,3 +15,7 @@ miFormulario.addEventListener("submit", (event) => {
     miFormulario.appendChild(mensaje);
     console.log("Contraseña a validar: " + valorPassword);
 });
+
+
+
+

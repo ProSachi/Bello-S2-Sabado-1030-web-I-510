@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Las partes del Event Loop</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f6f8fb;--panel:#fff;--ink:#17202e;--mute:#5d6b82;--line:#d9e0ec;--stack:#2f5bea;--web:#e08a00;--queue:#8a4fd6;--loop:#0d9488;--hl:#fff3c4;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 "Bricolage Grotesque",system-ui,sans-serif}
+.wrap{max-width:1120px;margin:0 auto;padding:20px 16px 40px}
+h1{font-size:clamp(1.5rem,4vw,2.2rem);margin:0 0 4px;letter-spacing:-.02em}
+.sub{color:var(--mute);margin:0 0 16px}
+.board{display:grid;grid-template-columns:1fr 1.1fr 1fr;grid-template-areas:"code web web" "stack loop queue" "con con con";gap:14px}
+@media(max-width:820px){.board{grid-template-columns:1fr;grid-template-areas:"code" "stack" "web" "loop" "queue" "con"}}
+.box{background:var(--panel);border:2px solid var(--line);border-radius:14px;padding:12px;transition:border-color .3s,box-shadow .3s}
+.box h2{font-size:1.05rem;margin:0}
+.box p.d{margin:2px 0 10px;color:var(--mute);font-size:.85rem;line-height:1.35}
+.box.lit{box-shadow:0 0 0 4px var(--c)}
+#bStack{grid-area:stack;--c:#2f5bea33;border-color:var(--stack)}#bStack h2{color:var(--stack)}
+#bWeb{grid-area:web;--c:#e08a0033;border-color:var(--web)}#bWeb h2{color:var(--web)}
+#bQueue{grid-area:queue;--c:#8a4fd633;border-color:var(--queue)}#bQueue h2{color:var(--queue)}
+#bLoop{grid-area:loop;--c:#0d948833;border-color:var(--loop);text-align:center;display:flex;flex-direction:column;align-items:center}#bLoop h2{color:var(--loop)}
+#bCode{grid-area:code}
+#bCon{grid-area:con}
+pre{margin:0;font:14px/1.7 "JetBrains Mono",monospace;overflow-x:auto}
+.ln{display:block;border-left:4px solid transparent;padding-right:8px;white-space:pre}
+.ln i{display:inline-block;width:1.6em;text-align:right;margin-right:10px;color:var(--mute);font-style:normal}
+.ln.act{background:var(--hl);border-left-color:var(--web)}
+.list{display:flex;flex-direction:column;gap:6px;min-height:160px;font:13px "JetBrains Mono",monospace}
+#stack{flex-direction:column-reverse;justify-content:flex-start;border-bottom:4px solid var(--stack);min-height:200px}
+#queue{flex-direction:row;flex-wrap:wrap;align-content:flex-start;min-height:200px;border:2px dashed var(--line);border-radius:8px;padding:8px}
+@media(max-width:820px){#stack,#queue{min-height:110px}}
+.it{padding:7px 10px;border-radius:8px;border:2px solid;background:var(--panel);animation:pop .3s}
+#stack .it{border-color:var(--stack);color:var(--stack)}
+#stack .it:last-child{background:var(--stack);color:#fff}
+#web .it{border-color:var(--web);color:var(--web)}
+#queue .it{border-color:var(--queue);color:var(--queue)}
+.bar{height:6px;background:var(--line);border-radius:3px;margin-top:6px;overflow:hidden}
+.bar b{display:block;height:100%;width:0;background:var(--web)}
+.empty{color:var(--mute);font-style:italic;font-family:inherit}
+@keyframes pop{from{transform:scale(.85);opacity:0}to{transform:none;opacity:1}}
+.fly{position:fixed;z-index:50;padding:7px 10px;border-radius:8px;border:2px solid;background:var(--panel);font:13px "JetBrains Mono",monospace;transition:left .8s ease,top .8s ease;pointer-events:none;white-space:nowrap}
+.ring{width:96px;height:96px;border-radius:50%;border:8px solid #c7ece8;border-top-color:var(--loop);animation:spin 3s linear infinite;margin:6px 0 10px;position:relative;flex:none}
+.ring::after{content:"↻";position:absolute;inset:0;display:grid;place-items:center;font-size:30px;color:var(--loop);animation:spin 3s linear infinite reverse}
+.chk .ring{animation-duration:.8s}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.ring,.ring::after,.it{animation:none}.fly{transition:none}}
+.say{border-radius:12px;padding:10px 12px;font-size:.95rem;line-height:1.35;background:#e4f6f3;border:2px solid var(--loop);width:100%;transition:background .3s,border-color .3s}
+.say.no{background:#fdecec;border-color:#d64545}
+.say.yes{background:#e3f7e8;border-color:#1f9d4c}
+.con{background:#0e1320;color:#c9f5dc;border-radius:8px;padding:8px 12px;min-height:56px;font:14px "JetBrains Mono",monospace}
+.msg{margin:14px 0;padding:12px 14px;border-radius:10px;background:var(--panel);border:1px solid var(--line);border-left:5px solid var(--web);min-height:64px;font-size:1.05rem}
+.ctl{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+button{font:inherit;border:1px solid var(--line);background:var(--panel);color:var(--ink);padding:8px 14px;border-radius:8px;cursor:pointer}
+button:hover{border-color:var(--stack)}
+button:focus-visible{outline:3px solid var(--stack);outline-offset:2px}
+button.go{background:var(--stack);color:#fff;border-color:var(--stack);font-weight:700}
+button:disabled{opacity:.45;cursor:default}
+.st{color:var(--mute);font-size:.85rem}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>Las 4 partes del Event Loop</h1>
+  <p class="sub">Avanza paso a paso y observa cómo viaja cada tarea entre las partes.</p>
+  <div class="board">
+    <div class="box" id="bCode"><h2>Código</h2><p class="d">&nbsp;</p><pre id="code"></pre></div>
+    <div class="box" id="bWeb"><h2>Web APIs</h2><p class="d">Herramientas del navegador, no de JS: setTimeout, DOM, fetch. JS les delega las tareas de tiempo o de red.</p><div class="list" id="web"></div></div>
+    <div class="box" id="bStack"><h2>Call Stack</h2><p class="d">Lo que JS ejecuta ahora mismo. LIFO: el último en entrar es el primero en salir. Solo cabe una a la vez.</p><div class="list" id="stack"></div></div>
+    <div class="box" id="bLoop" aria-live="polite"><h2>Event Loop</h2><p class="d">Ciclo infinito con una sola pregunta.</p><div class="ring" id="ring"></div><div class="say" id="say">¿Está vacío el Call Stack?</div></div>
+    <div class="box" id="bQueue"><h2>Callback Queue</h2><p class="d">Aquí espera el resultado de la Web API hasta que le toque su turno.</p><div class="list" id="queue"></div></div>
+    <div class="box" id="bCon"><h2>Consola</h2><p class="d">&nbsp;</p><div class="con" id="out">&nbsp;</div></div>
+  </div>
+  <div class="msg" id="msg">Pulsa Siguiente paso para empezar.</div>
+  <div class="ctl">
+    <button id="next" class="go">Siguiente paso</button>
+    <button id="play">Reproducir</button>
+    <button id="reset">Reiniciar</button>
+    <span class="st" id="st"></span>
+  </div>
+</div>
+<script>
+var CODE=["console.log('Inicio');","setTimeout(() => console.log('Timer'), 3000);","console.log('Fin');"];
+var CB='() => log("Timer")';
+// a: push | out | toWeb | wait | toQueue | toStack | pop
+var STEPS=[
+{l:1,t:'El script entra a la Call Stack como main().',q:['¿Call Stack vacía? No, hay código ejecutándose. Espero.','no'],o:[['push','main()']]},
+{l:1,t:'console.log("Inicio") entra a la pila, se ejecuta y sale.',q:['¿Call Stack vacía? No. Espero.','no'],o:[['push','console.log("Inicio")'],['out','Inicio']]},
+{l:2,t:'setTimeout entra a la pila.',q:['¿Call Stack vacía? No. Espero.','no'],o:[['push','setTimeout()']]},
+{l:2,t:'JS no se queda esperando: delega el timer a la Web API del navegador y la pila se libera.',q:['¿Call Stack vacía? No, main() sigue.','no'],o:[['toWeb','setTimeout 3s']]},
+{l:3,t:'Mientras el navegador cuenta, JS sigue con la siguiente línea.',q:['¿Call Stack vacía? No. Espero.','no'],o:[['push','console.log("Fin")'],['out','Fin']]},
+{l:3,t:'El script termina y main() sale. La Call Stack queda vacía.',q:['¿Call Stack vacía? Sí. ¿Algo en la cola? Todavía no.','idle'],o:[['pop']]},
+{l:2,t:'Pasan los 3 segundos en la Web API…',q:['¿Call Stack vacía? Sí. ¿Algo en la cola? Todavía no.','idle'],o:[['wait']]},
+{l:2,t:'La Web API no puede meter el callback a la fuerza en la pila: lo deja en la Callback Queue a esperar su turno.',q:['¿Call Stack vacía? Sí. ¿Algo en la cola? ¡Sí!','yes'],o:[['toQueue']]},
+{l:2,t:'El Event Loop ve la pila vacía y un callback esperando: lo toma y lo mete a la Call Stack.',q:['Pila vacía y cola con tarea: la muevo a la pila.','yes'],o:[['toStack']]},
+{l:2,t:'El callback se ejecuta: llama a console.log("Timer") y termina.',q:['¿Call Stack vacía? No, hay un callback ejecutándose.','no'],o:[['push','console.log("Timer")'],['out','Timer'],['pop']]},
+{l:0,t:'Todo terminó, pero el Event Loop nunca para: sigue preguntando si la pila está vacía.',q:['¿Está vacío el Call Stack? ¿Hay algo en la cola? …','idle'],o:[]}
+];
+var $=function(i){return document.getElementById(i)};
+var st=[],web=[],queue=[],outs=[],idx=0,busy=false,timer=null,line=0,prog=0;
+var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms)})};
+function draw(id,arr,txt,cls){var e=$(id);e.innerHTML='';
+  if(!arr.length){var d=document.createElement('div');d.className='empty';d.textContent=txt;e.appendChild(d);return}
+  arr.forEach(function(v,i){var d=document.createElement('div');d.className='it';d.textContent=v;
+    if(id=='web'){var b=document.createElement('div');b.className='bar';b.innerHTML='<b id="pg" style="width:'+prog+'%"></b>';d.appendChild(b)}e.appendChild(d)})}
+function render(){
+  $('code').innerHTML=CODE.map(function(t,i){return '<span class="ln'+(line==i+1?' act':'')+'"><i>'+(i+1)+'</i>'+t.replace(/</g,'&lt;')+'</span>'}).join('');
+  draw('stack',st,'vacía');draw('web',web,'nada esperando');draw('queue',queue,'vacía');
+  $('out').innerHTML=outs.length?outs.map(function(x){return '&gt; '+x}).join('<br>'):'&nbsp;';
+}
+function lit(id){var e=$(id);e.classList.add('lit');setTimeout(function(){e.classList.remove('lit')},700)}
+function rectOf(el){var r=el.getBoundingClientRect();return{x:r.left+r.width/2-45,y:r.top+r.height/2-14}}
+function fly(from,to,text,color){return new Promise(function(res){
+  var d=document.createElement('div');d.className='fly';d.textContent=text;d.style.borderColor=d.style.color=color;
+  var a=rectOf(from),b=rectOf(to);d.style.left=a.x+'px';d.style.top=a.y+'px';document.body.appendChild(d);
+  requestAnimationFrame(function(){requestAnimationFrame(function(){d.style.left=b.x+'px';d.style.top=b.y+'px'})});
+  setTimeout(function(){d.remove();res()},850)})}
+function stackTop(){var k=$('stack').querySelector('.it:last-child');return k||$('stack')}
+async function op(o){var k=o[0];
+  if(k=='push'){var src=document.querySelector('.ln.act')||$('bCode');await fly(src,$('stack'),o[1],'#2f5bea');st.push(o[1]);lit('bStack');render();await sleep(350)}
+  else if(k=='out'){await fly(stackTop(),$('out'),o[1],'#2f5bea');st.pop();outs.push(o[1]);render();await sleep(250)}
+  else if(k=='pop'){st.pop();lit('bStack');render();await sleep(500)}
+  else if(k=='toWeb'){var v=st[st.length-1];await fly(stackTop(),$('web'),v,'#e08a00');st.pop();web.push(o[1]);prog=0;lit('bWeb');render();await sleep(300)}
+  else if(k=='wait'){lit('bWeb');for(var i=1;i<=30;i++){prog=i/30*100;var p=$('pg');if(p)p.style.width=prog+'%';web[0]='setTimeout '+Math.max(0,(3-i/10)).toFixed(1)+'s';var it=$('web').querySelector('.it');if(it&&it.firstChild)it.firstChild.nodeValue=web[0];await sleep(70)}web[0]='setTimeout 0.0s';render()}
+  else if(k=='toQueue'){await fly($('web'),$('queue'),CB,'#8a4fd6');web=[];prog=0;queue.push(CB);lit('bQueue');render();await sleep(350)}
+  else if(k=='toStack'){$('bLoop').classList.add('chk');lit('bLoop');await sleep(700);await fly($('queue'),$('stack'),CB,'#2f5bea');queue.shift();st.push('callback');lit('bStack');render();$('bLoop').classList.remove('chk');await sleep(350)}
+}
+async function next(){
+  if(busy||idx>=STEPS.length)return;busy=true;$('next').disabled=true;
+  var s=STEPS[idx];line=s.l;$('msg').textContent=s.t;
+  $('say').textContent=s.q[0];$('say').className='say '+(s.q[1]=='idle'?'':s.q[1]);
+  $('bLoop').classList.add('chk');setTimeout(function(){$('bLoop').classList.remove('chk')},900);
+  render();idx++;
+  for(var i=0;i<s.o.length;i++)await op(s.o[i]);
+  $('st').textContent='Paso '+idx+' de '+STEPS.length;
+  busy=false;$('next').disabled=idx>=STEPS.length;if(idx>=STEPS.length)stop();
+}
+function stop(){if(timer){clearInterval(timer);timer=null}$('play').textContent='Reproducir'}
+function reset(){stop();st=[];web=[];queue=[];outs=[];idx=0;line=0;prog=0;
+  $('msg').textContent='Pulsa Siguiente paso para empezar.';$('say').textContent='¿Está vacío el Call Stack?';$('say').className='say';
+  $('st').textContent='';$('next').disabled=false;render()}
+$('next').onclick=next;$('reset').onclick=function(){if(!busy)reset()};
+$('play').onclick=function(){if(timer){stop();return}if(idx>=STEPS.length&&!busy)reset();
+  $('play').textContent='Pausar';next();timer=setInterval(next,1800)};
+document.addEventListener('keydown',function(e){if(e.key=='ArrowRight')next()});
+render();
+</script>
+</body>
+</html>

@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gatos</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 2rem;
+        }
+
+        .gatos {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .tarjeta-gato {
+            border: 1px solid #cccccc;
+            border-top: 6px solid var(--color-gato);
+            border-radius: 6px;
+            padding: 1rem;
+            overflow-wrap: anywhere;
+        }
+
+        .tarjeta-gato h3 {
+            margin-top: 0;
+        }
+
+        img{
+            width:150px;
+            height:150px;
+        }
+
+    </style>
+</head>
+
+<body>
+    <section id="container">
+        <h2>Gatos</h2>
+
+        <button id="btncargar">Cargar Gatos</button>
+    </section>
+
+    <script src="index.js"></script>
+</body>
+
+</html>
